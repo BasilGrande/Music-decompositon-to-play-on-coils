@@ -1,13 +1,14 @@
 import librosa
 import numpy as np
 import soundfile as sf
+import matplotlib.pyplot as plt
 
 # Load the audio file
 audio_path = 'pour_elise.mp3'
 audio_data, sampling_rate = librosa.load(audio_path)
 
 # Segment length in seconds (10ms in this case)
-segment_length = 0.1
+segment_length = 0.01
 segment_samples = int(segment_length * sampling_rate)
 
 # Calculate the total number of segments
@@ -19,7 +20,7 @@ reconstructed_audio = np.zeros(len(audio_data))
 # Iterate over each segment
 for i in range(num_segments):
     # Extract the current segment
-    segment = audio_data[i * segment_samples : (i+1) * segment_samples]
+    segment = audio_data[i * segment_samples: (i + 1) * segment_samples]
 
     # Perform the FFT on the segment
     fft_data = np.fft.fft(segment)
@@ -49,3 +50,26 @@ output_path = 'out.mp3'
 sf.write(output_path, reconstructed_audio, sampling_rate)
 
 print("Reconstructed audio saved as", output_path)
+reconstructed_audio = librosa.util.normalize(reconstructed_audio)
+
+# Save the reconstructed audio as an MP3 file
+output_path = 'out.mp3'
+sf.write(output_path, reconstructed_audio, sampling_rate)
+
+print("Reconstructed audio saved as", output_path)
+
+# Load the MP3 file
+mp3_file = "out.mp3"
+audio, sr = librosa.load(mp3_file)
+
+# Get the time axis
+duration = len(audio) / sr
+time = np.linspace(0, duration, len(audio))
+
+# Plot the waveform
+plt.figure(figsize=(10, 4))
+plt.plot(time, audio, color='b')
+plt.xlabel("Time (seconds)")
+plt.ylabel("Amplitude")
+plt.title("Waveform of the MP3 file")
+plt.show()
