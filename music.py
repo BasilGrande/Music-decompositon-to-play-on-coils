@@ -2,14 +2,14 @@ import librosa
 import numpy as np
 import soundfile as sf
 import csv
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Load the audio file
 audio_path = 'pour_elise.mp3'
 audio_data, sampling_rate = librosa.load(audio_path)
 
-# Segment length in seconds (100ms in this case)
-segment_length = 0.1
+# Segment length in seconds (10ms in this case)
+segment_length = 0.01
 segment_samples = int(segment_length * sampling_rate)
 
 # Calculate the total number of segments
@@ -21,6 +21,9 @@ reconstructed_audio = np.zeros(len(audio_data))
 # Initialize a list to store the dominant frequencies and amplitudes for each segment
 dominant_frequencies = []
 dominant_amplitudes = []
+
+# Create a progress bar
+pbar = tqdm(total=num_segments, desc='Processing segments')
 
 # Iterate over each segment
 for i in range(num_segments):
@@ -59,6 +62,12 @@ for i in range(num_segments):
     end_idx = start_idx + segment_samples
     reconstructed_audio[start_idx:end_idx] += reconstructed_segment
 
+    # Update the progress bar
+    pbar.update(1)
+
+# Close the progress bar
+pbar.close()
+
 # Normalize the amplitude of the reconstructed audio
 reconstructed_audio = librosa.util.normalize(reconstructed_audio)
 
@@ -78,15 +87,3 @@ with open(output_csv, 'w', newline='') as csvfile:
 
 print("Reconstructed audio saved as", output_path)
 print("Dominant frequencies and amplitudes saved to", output_csv)
-
-# Get the time axis
-duration = len(audio_data) / sampling_rate
-time = np.linspace(0, duration, len(audio_data))
-
-# Plot the waveform
-plt.figure(figsize=(10, 4))
-plt.plot(time, audio_data, color='b')
-plt.xlabel("Time (seconds)")
-plt.ylabel("Amplitude")
-plt.title("Waveform of the MP3 file")
-plt.show()
