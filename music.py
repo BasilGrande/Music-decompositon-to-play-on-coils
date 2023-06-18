@@ -4,86 +4,90 @@ import soundfile as sf
 import csv
 from tqdm import tqdm
 
-# Load the audio file
-audio_path = 'pour_elise.mp3'
-audio_data, sampling_rate = librosa.load(audio_path)
+# Load the original audio file
+original_audio_path = 'pour_elise.mp3'
+original_audio_data, sampling_rate = librosa.load(original_audio_path)
 
-# Segment length in seconds (10ms in this case)
-segment_length = 0.01
-segment_samples = int(segment_length * sampling_rate)
+# Range of segment lengths to sweep over
+segment_lengths = np.linspace(0.25, 0.001, num=20)
 
-# Calculate the total number of segments
-num_segments = len(audio_data) // segment_samples
+# Initialize variables to store the best iterations
+best_errors = np.inf * np.ones(3)
+best_segment_lengths = np.zeros(3)
+best_reconstructed_audios = [None] * 3
 
-# Initialize an empty array to store the reconstructed audio
-reconstructed_audio = np.zeros(len(audio_data))
+# Create a progress bar for the iterations
+pbar_iterations = tqdm(total=len(segment_lengths), desc='Iterations')
 
-# Initialize a list to store the dominant frequencies and amplitudes for each segment
-dominant_frequencies = []
-dominant_amplitudes = []
+# Iterate over each segment length
+for segment_length in segment_lengths:
+    # Convert segment length to segment samples
+    segment_samples = int(segment_length * sampling_rate)
 
-# Create a progress bar
-pbar = tqdm(total=num_segments, desc='Processing segments')
+    # Calculate the total number of segments
+    num_segments = len(original_audio_data) // segment_samples
 
-# Iterate over each segment
-for i in range(num_segments):
-    # Extract the current segment
-    segment = audio_data[i * segment_samples: (i + 1) * segment_samples]
+    # Initialize an empty array to store the reconstructed audio
+    reconstructed_audio = np.zeros(len(original_audio_data))
 
-    # Perform the FFT on the segment
-    fft_data = np.fft.fft(segment)
-    magnitude = np.abs(fft_data)
+    # Iterate over each segment
+    for i in range(num_segments):
+        # Extract the current segment
+        segment = original_audio_data[i * segment_samples: (i + 1) * segment_samples]
 
-    # Find the indices of the positive frequencies (excluding DC component)
-    positive_indices = np.where(np.fft.fftfreq(segment_samples, 1 / sampling_rate) > 0)[0]
+        # Perform the FFT on the segment
+        fft_data = np.fft.fft(segment)
+        magnitude = np.abs(fft_data)
 
-    # Find the indices of the 8 most dominant positive frequencies
-    num_freqs = 8
-    dominant_indices = positive_indices[np.argpartition(magnitude[positive_indices], -num_freqs)[-num_freqs:]]
+        # Find the indices of the positive frequencies (excluding DC component)
+        positive_indices = np.where(np.fft.fftfreq(segment_samples, 1 / sampling_rate) > 0)[0]
 
-    # Get the dominant frequencies and amplitudes
-    segment_frequencies = np.fft.fftfreq(segment_samples, 1 / sampling_rate)
-    dominant_freqs = segment_frequencies[dominant_indices]
-    dominant_amps = magnitude[dominant_indices]
+        # Find the indices of the 8 most dominant positive frequencies
+        num_freqs = 8
+        dominant_indices = positive_indices[np.argpartition(magnitude[positive_indices], -num_freqs)[-num_freqs:]]
 
-    # Append the dominant frequencies and amplitudes to the lists
-    dominant_frequencies.append(dominant_freqs)
-    dominant_amplitudes.append(np.round(dominant_amps, decimals=1))
+        # Create a mask to zero out the non-dominant frequencies
+        mask = np.zeros_like(fft_data)
+        mask[dominant_indices] = fft_data[dominant_indices]
 
-    # Create a mask to zero out the non-dominant frequencies
-    mask = np.zeros_like(fft_data)
-    mask[dominant_indices] = fft_data[dominant_indices]
+        # Perform the IFFT on the masked data
+        reconstructed_segment = np.fft.ifft(mask).real
 
-    # Perform the IFFT on the masked data
-    reconstructed_segment = np.fft.ifft(mask).real
+        # Add the reconstructed segment to the output array
+        start_idx = i * segment_samples
+        end_idx = start_idx + segment_samples
+        reconstructed_audio[start_idx:end_idx] += reconstructed_segment
 
-    # Add the reconstructed segment to the output array
-    start_idx = i * segment_samples
-    end_idx = start_idx + segment_samples
-    reconstructed_audio[start_idx:end_idx] += reconstructed_segment
+    # Normalize the amplitude of the reconstructed audio
+    reconstructed_audio = librosa.util.normalize(reconstructed_audio)
 
-    # Update the progress bar
-    pbar.update(1)
+    # Calculate the quadratic error between the original and reconstructed audio
+    error = np.mean(np.square(original_audio_data - reconstructed_audio))
 
-# Close the progress bar
-pbar.close()
+    # Find the index of the current segment length if it is one of the best iterations
+    min_error_idx = np.argmin(best_errors)
+    if error < best_errors[min_error_idx]:
+        # Update the best errors, segment lengths, and reconstructed audios arrays
+        best_errors[min_error_idx] = error
+        best_segment_lengths[min_error_idx] = segment_length
+        best_reconstructed_audios[min_error_idx] = reconstructed_audio
 
-# Normalize the amplitude of the reconstructed audio
-reconstructed_audio = librosa.util.normalize(reconstructed_audio)
+    # Update the progress bar for iterations
+    pbar_iterations.update(1)
 
-# Save the reconstructed audio as an MP3 file
-output_path = 'out.mp3'
-sf.write(output_path, reconstructed_audio, sampling_rate)
+# Close the progress bar for iterations
+pbar_iterations.close()
 
-# Convert the lists of dominant frequencies and amplitudes to NumPy arrays
-dominant_frequencies = np.array(dominant_frequencies)
-dominant_amplitudes = np.array(dominant_amplitudes)
+# Save the best three reconstructed audios as MP3 files
+for i in range(3):
+    if best_reconstructed_audios[i] is not None:
+        output_path = f'out_best_segment_{i+1}.mp3'
+        sf.write(output_path, best_reconstructed_audios[i], sampling_rate)
 
-# Save the dominant frequencies and amplitudes to a CSV file
-output_csv = 'dominant_frequencies.csv'
-with open(output_csv, 'w', newline='') as csvfile:
-    writer = csv.writer(csvfile)
-    writer.writerows(np.hstack((dominant_frequencies, dominant_amplitudes)))
+        # Print the error for each best iteration
+        print(f"Error for best iteration {i+1}: {best_errors[i]}")
 
-print("Reconstructed audio saved as", output_path)
-print("Dominant frequencies and amplitudes saved to", output_csv)
+# Print the best segment lengths
+print("Best segment lengths:")
+for length in best_segment_lengths:
+    print(length)
