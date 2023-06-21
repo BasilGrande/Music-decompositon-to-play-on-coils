@@ -1,7 +1,7 @@
+import struct
 import librosa
 import numpy as np
 import soundfile as sf
-import csv
 
 # Load the original audio file
 original_audio_path = 'pour_elise.mp3'
@@ -17,9 +17,6 @@ frequency_ranges = [
 
 # Initialize an empty array to store the reconstructed audio
 reconstructed_audio = np.zeros(len(original_audio_data))
-
-# Initialize a list to store the frequencies and their amplitudes
-segment_frequencies = []
 
 # Iterate over each frequency range
 for freq_range in frequency_ranges:
@@ -70,42 +67,41 @@ for freq_range in frequency_ranges:
         end_idx = start_idx + segment_samples
         reconstructed_audio[start_idx:end_idx] += reconstructed_segment
 
-        # Get the frequencies and their amplitudes within the dominant indices
-        segment_freq_amp = []
-        for idx in dominant_indices:
-            freq = np.fft.fftfreq(segment_samples, 1 / sampling_rate)[idx]
-            amp = magnitude[idx]
-            segment_freq_amp.extend([freq, amp])
-
-        # Pad with zeros if there are less than 8 frequencies and amplitudes
-        num_missing = 8 - len(segment_freq_amp)
-        segment_freq_amp.extend([0] * num_missing)
-
-        # Append the segment frequencies and amplitudes to the list
-        segment_frequencies.append(segment_freq_amp)
-
 # Save the reconstructed audio as an MP3 file
 output_path = 'out.mp3'
 sf.write(output_path, reconstructed_audio, sampling_rate)
 
-# Create a CSV file to store the frequencies and amplitudes
-csv_path = 'frequencies.csv'
-with open(csv_path, 'w', newline='') as csv_file:
-    writer = csv.writer(csv_file)
-    writer.writerow([
-        'Frequency 1', 'Amplitude 1', 'Frequency 2', 'Amplitude 2',
-        'Frequency 3', 'Amplitude 3', 'Frequency 4', 'Amplitude 4',
-        'Frequency 5', 'Amplitude 5', 'Frequency 6', 'Amplitude 6',
-        'Frequency 7', 'Amplitude 7', 'Frequency 8', 'Amplitude 8'
-    ])
-    for freq_amp in segment_frequencies:
-        writer.writerow(freq_amp)
-
-# Print the completion message
-print("Audio decomposition and reconstruction completed.")
 # Calculate the quadratic error between the original audio and reconstructed audio
 quadratic_error = np.mean((original_audio_data - reconstructed_audio) ** 2)
 
 # Print the quadratic error
 print("Quadratic Error:", quadratic_error)
 
+
+def normalize_amplitude(amplitude, max_amplitude):
+    max_value = np.max(amplitude)
+    scale_factor = max_amplitude / max_value
+    normalized_amplitude = amplitude * scale_factor
+    return normalized_amplitude
+
+def get_normalized_amplitude_array(mp3_file, target_sr, max_amplitude):
+    audio, sr = librosa.load(mp3_file, sr=None)
+    audio_resampled = librosa.resample(audio, sr, target_sr)
+    amplitude = librosa.amplitude_to_db(audio_resampled, ref=np.max)
+    normalized_amplitude = normalize_amplitude(amplitude, max_amplitude)
+    return normalized_amplitude
+
+def write_amplitude_to_file(amplitude_array, output_file):
+    with open(output_file, 'wb') as file:
+        for sample in amplitude_array:
+            byte = struct.pack('b', int(sample))
+            file.write(byte)
+
+# Example usage
+mp3_file = 'out.mp3'
+target_sr = 5000
+max_amplitude = 64
+output_file = 'song.bin'
+
+normalized_amplitude_array = get_normalized_amplitude_array(mp3_file, target_sr, max_amplitude)
+write_amplitude_to_file(normalized_amplitude_array, output_file)
