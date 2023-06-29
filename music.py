@@ -4,7 +4,7 @@ import numpy as np
 import soundfile as sf
 
 # Load the original audio file
-original_audio_path = 'pour_elise.mp3'
+original_audio_path = '7.mp3'
 original_audio_data, sampling_rate = librosa.load(original_audio_path)
 
 # Define frequency ranges and corresponding segment lengths
