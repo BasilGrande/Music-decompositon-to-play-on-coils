@@ -16,15 +16,15 @@ def sample_amplitude(filename, target_sampling_rate, duration):
     return audio_downsampled
 
 # Set the filename, desired sampling rate, and duration in seconds
-filename = "7.mp3"
-target_sampling_rate = 5000  # 5kHz
-duration = 100  # Number of seconds to use from the song
+filename = "elise.mp3"
+target_sampling_rate = 20000  # 20kHz
+duration = 20  # Number of seconds to use from the song
 
 # Sample the amplitude
 amplitude_samples = sample_amplitude(filename, target_sampling_rate, duration)
 
 # Find the index of the first non-zero value
-nonzero_index = next((i for i, sample in enumerate(amplitude_samples) if sample != 0), None) + 429
+nonzero_index = next((i for i, sample in enumerate(amplitude_samples) if sample != 0), None)
 
 # Trim the amplitude samples from the first non-zero value onwards
 trimmed_samples = amplitude_samples[nonzero_index:]
@@ -42,7 +42,7 @@ rounded_samples = np.round(scaled_samples)
 rounded_samples = rounded_samples.astype(np.uint8)
 
 # Save the rounded amplitude samples to a binary file
-with open("output.bin", "wb") as f:
+with open("20kHz_" + filename + ".bin", "wb") as f:
     for sample in rounded_samples:
         f.write(struct.pack('B', sample))
 
